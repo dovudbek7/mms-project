@@ -1,3 +1,10 @@
 src/venv/
+src js/node_modules/
+out js/
+out/
 test/
 md/
+*.DS_Store
+__pycache__/
+*.pyc
+pdef/
