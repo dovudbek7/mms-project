@@ -45,11 +45,14 @@ class Config:
     late_night_start_before: int = 5          # 時刻 < 05:00 を深夜発とみなす
     late_night_end_after: int = 22            # 時刻 > 22:00 を深夜着とみなす
 
-    # --- 金額/規程デフォルト (旅費規定 未提供 → プレースホルダ) ---
-    # 空 dict / None は「規程未提供」のセンチネル. 実値を入れると判定が有効化される.
-    amount_limits: dict = field(default_factory=dict)
-    # 例 (規程入手後に設定): {"日当": {"0": 0, "50": 1000, "100": 2000}, "宿泊料上限": 10000}
-    receipt_required_above: int | None = None     # None → 領収書閾値は規程未提供
+    # --- 金額/規程 (J-4-1 国内出張旅費規定 2025-10-01施行 より) ---
+    # 日当: 一般職 50km以上 1,700円/日 (50km未満 0円)
+    # 宿泊料上限: 第３種/第４種 13,500円 (東京23区基準; 管理者は15,000円まで許容 → 手動確認)
+    amount_limits: dict = field(default_factory=lambda: {
+        "日当": {"0": 0, "50": 1700},
+        "宿泊料上限": 13500,
+    })
+    receipt_required_above: int | None = 1000    # 1,000円以上の非免除明細は領収書必須
     receipt_exempt_transports: tuple = ("電車･ﾊﾞｽ",)  # IC/運賃系は領収書免除候補
     # 規程未提供時のフォールバック (旅費規定 入手後は receipt_required_above が優先):
     #   - high_value_provisional: 免除交通機関でもこの額以上・領収書なしは要確認
@@ -73,7 +76,7 @@ class Config:
     # --- 既知の欠落 (常に出力にバナー表示) ---
     known_gaps: list = field(default_factory=lambda: [
         "2026-05 の出勤簿(勤怠)が未提供 — 出張実態・労務の勤怠照合は劣化(advisory)。",
-        "旅費規定(J-4-1 / 判定ルールマスタ)が未提供 — 金額・領収書の上限判定は config 既定値依存。実値が無い限り NG は出さず『未確認(規程未提供)』。",
+        "宿泊料上限は 13,500円(第３種/第４種 東京23区基準)で設定。管理者(上限15,000円)・東京23区以外(上限9,500円)は上限が異なるため手動確認が必要。",
     ])
 
     def has_amount_rules(self) -> bool:
