@@ -277,6 +277,20 @@ def _check_rules(r: ExpenseReport, cfg: Config) -> tuple[str, list[str], dict]:
                 "理由": "社用車(旅費交通費)とレンタカー(貸借費)の区分確認が必要",
             })
 
+        # (7) 委託サービス費 + 交通・宿泊系 分類チェック
+        _TRAVEL_TRANSPORTS = {"電車･ﾊﾞｽ", "電車・バス", "ﾎﾃﾙ", "ホテル", "車", "車(同乗)",
+                              "タクシー", "飛行機", "新幹線", "バス"}
+        if (leg.account_name and "委託サービス費" in leg.account_name
+                and (leg.transport in _TRAVEL_TRANSPORTS
+                     or leg.allowance_cd_perdiem
+                     or leg.allowance_cd_lodging
+                     or leg.allowance_cd_stay)):
+            needs_check.append({
+                "明細No": leg.leg_no, "種別": "勘定科目分類",
+                "金額": leg.amount,
+                "理由": "交通・宿泊費が委託サービス費で申請されています。旅費交通費への変更要確認",
+            })
+
     statuses: list[str] = []
     reasons: list[str] = []
     evidence: dict = {}
