@@ -53,6 +53,12 @@ def load_employees(path: str, password: str) -> list[Employee]:
         if key:
             col[key] = i
 
+    # 役職列: 役職/グレード/職位 のいずれかを探す (無ければ None)
+    _grade_col = next(
+        (k for k in col if "役職" in str(k) or "グレード" in str(k) or "職位" in str(k)),
+        None,
+    )
+
     def _cell(r, name: str):
         idx = col.get(name)
         if idx is None or idx >= len(r):
@@ -85,6 +91,7 @@ def load_employees(path: str, password: str) -> list[Employee]:
                 email=_text(_cell(r, "メールアドレス")),
                 department=_text(_cell(r, "所属部署")),  # 空欄は None
                 jurisdiction=_text(_cell(r, "所属管轄")),
+                grade=_text(_cell(r, _grade_col)) if _grade_col else None,
             )
         )
 

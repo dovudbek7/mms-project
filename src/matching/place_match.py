@@ -90,6 +90,7 @@ def _hit(c: Customer, score: float, status: str) -> PlaceMatch:
         distance_band=c.distance_band,
         km_lower=c.km_lower,
         km_upper=c.km_upper,
+        prefecture=c.prefecture,
     )
 
 

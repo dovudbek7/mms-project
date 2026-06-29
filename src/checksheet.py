@@ -51,7 +51,30 @@ _AXIS_SYSTEM = {
 }
 
 
-def enrich_reports(reports, employees, customers, cfg) -> None:
+def _grade_from_role(role: str | None) -> str | None:
+    """出勤簿の役割区分 → 役職区分 (管理職/一般職) に変換."""
+    if not role:
+        return None
+    if role == "社員":
+        return "一般職"
+    if "承認者" in role:
+        return "管理職"
+    return None
+
+
+def _build_grade_lookup(attendance_days) -> dict[str, str]:
+    """name_norm → grade の辞書を出勤簿 role から構築."""
+    lookup: dict[str, str] = {}
+    for d in attendance_days:
+        if d.name_norm and d.role and d.name_norm not in lookup:
+            grade = _grade_from_role(d.role)
+            if grade:
+                lookup[d.name_norm] = grade
+    return lookup
+
+
+def enrich_reports(reports, employees, customers, cfg,
+                   grade_lookup: dict | None = None) -> None:
     """各レポートに従業員ID, 各レッグに照合顧客/距離を付与 (in place)."""
     eidx = build_employee_index(employees)
     cidx = build_customer_index(customers)
@@ -65,6 +88,11 @@ def enrich_reports(reports, employees, customers, cfg) -> None:
             r.department = e.department
             r.email = e.email
             r.resolved_name_norm = e.name_norm
+            r.grade = e.grade  # employee master (None if column missing)
+        # 出勤簿 role からフォールバック
+        if r.grade is None and grade_lookup:
+            name_key = r.resolved_name_norm or r.inputter_name_norm
+            r.grade = grade_lookup.get(name_key)
         for leg in r.legs:
             # 移動レッグ(電車･ﾊﾞｽ/車等)の到着地は経由地であり訪問先(顧客)ではない.
             # 地名→無関係社名の誤突合を避けるため顧客照合をスキップする.
@@ -81,6 +109,7 @@ def enrich_reports(reports, employees, customers, cfg) -> None:
             leg.dest_km_lower = pm.km_lower
             leg.dest_km_upper = pm.km_upper
             leg.dest_candidates = pm.candidates
+            leg.dest_prefecture = pm.prefecture
     return eidx, cidx
 
 
@@ -104,7 +133,8 @@ def _matched_bands(r: ExpenseReport) -> str:
 
 def build_check_sheet(reports, employees, customers, approver_rules,
                       attendance_days, cfg, import_log=None) -> dict:
-    eidx, cidx = enrich_reports(reports, employees, customers, cfg)
+    grade_lookup = _build_grade_lookup(attendance_days)
+    eidx, cidx = enrich_reports(reports, employees, customers, cfg, grade_lookup)
     aidx = build_approver_index(approver_rules)
     att = AttendanceLookup(attendance_days)
 
@@ -302,6 +332,7 @@ def _build_master_check(reports, employees, approver_rules, aidx) -> list[dict]:
 
 def _build_rule_rows(cfg) -> list[dict]:
     """06_判定ルール: 使用した閾値・区分・規程提供状況を行に整形."""
+    al = cfg.amount_limits
     rows = [
         {"項目": "氏名ファジー閾値", "値": cfg.fuzzy_name_threshold, "備考": "difflib ratio (社員突合)"},
         {"項目": "地名照合閾値", "値": cfg.place_match_threshold, "備考": "rapidfuzz partial_ratio (顧客突合)"},
@@ -315,6 +346,16 @@ def _build_rule_rows(cfg) -> list[dict]:
          "備考": "未提供時は暫定閾値で判定"},
         {"項目": "確認のみ=承認 扱い", "値": "する" if cfg.confirm_only_counts_as_approval else "しない",
          "備考": "(確認)承認者を正式承認と見なすか"},
+        {"項目": "出張日当_一般職", "値": al.get("出張日当", {}).get("一般職", "未提供"), "備考": "円/日"},
+        {"項目": "出張日当_管理職", "値": al.get("出張日当", {}).get("管理職", "未提供"), "備考": "円/日"},
+        {"項目": "滞在補助費_一般職", "値": al.get("滞在補助費", {}).get("一般職", "未提供"), "備考": "円/日"},
+        {"項目": "滞在補助費_管理職", "値": al.get("滞在補助費", {}).get("管理職", "未提供"), "備考": "円/日"},
+        {"項目": "出張加算日当_一般職", "値": al.get("出張加算日当", {}).get("一般職", "未提供"), "備考": "円/日"},
+        {"項目": "出張加算日当_主任以上", "値": al.get("出張加算日当", {}).get("主任以上", "未提供"), "備考": "円/日"},
+        {"項目": "ホテル代_東京23区_管理職", "値": al.get("ホテル代", {}).get("東京23区", {}).get("管理職", "未提供"), "備考": "円"},
+        {"項目": "ホテル代_東京23区_一般職", "値": al.get("ホテル代", {}).get("東京23区", {}).get("一般職", "未提供"), "備考": "円"},
+        {"項目": "ホテル代_その他_管理職", "値": al.get("ホテル代", {}).get("その他", {}).get("管理職", "未提供"), "備考": "円"},
+        {"項目": "ホテル代_その他_一般職", "値": al.get("ホテル代", {}).get("その他", {}).get("一般職", "未提供"), "備考": "円"},
     ]
     for g in cfg.known_gaps:
         rows.append({"項目": "既知の前提/欠落", "値": "", "備考": g})

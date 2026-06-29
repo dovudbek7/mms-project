@@ -112,6 +112,7 @@ class PlaceMatch:
     km_lower: int | None = None
     km_upper: int | None = None
     candidates: list | None = None   # 複数候補時: [(取引先名, 距離区分), ...]
+    prefecture: str | None = None    # 顧客都道府県 (ホテル代地域判定用)
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +156,7 @@ class ExpenseLeg:
     dest_km_lower: int | None = None
     dest_km_upper: int | None = None
     dest_candidates: list | None = None  # 複数候補時の候補一覧
+    dest_prefecture: str | None = None   # 顧客都道府県 (ホテル代地域判定用)
     is_movement_leg: bool = False
 
 
@@ -186,6 +188,7 @@ class ExpenseReport:
     department: str | None = None
     email: str | None = None
     resolved_name_norm: str | None = None   # 突合した社員マスタ氏名の正規化形 (別名解決後)
+    grade: str | None = None                # 役職区分 (employee masterから引き継ぎ)
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +244,7 @@ class Employee:
     email: str | None
     department: str | None           # 所属部署
     jurisdiction: str | None         # 所属管轄 東/西
+    grade: str | None = None         # 役職区分 (管理職/一般職/主任以上 等)
 
 
 # ---------------------------------------------------------------------------
