@@ -79,20 +79,36 @@ def enrich_reports(reports, employees, customers, cfg,
     eidx = build_employee_index(employees)
     cidx = build_customer_index(customers)
     emp_by_id = {e.employee_id: e for e in employees}
+    role_override_lookup = {norm(k): v for k, v in (cfg.role_overrides or {}).items()}
     for r in reports:
-        res = resolve_employee(r.inputter_name_raw, eidx, cfg)
-        r.employee_id = res.employee_id
-        r.employee_match_status = res.status
-        if res.employee_id and res.employee_id in emp_by_id:
-            e = emp_by_id[res.employee_id]
+        # ① 申請者CD による直接 ID ルックアップ (新CSV のみ)
+        if r.applicant_cd and r.applicant_cd in emp_by_id:
+            e = emp_by_id[r.applicant_cd]
+            r.employee_id = e.employee_id
+            r.employee_match_status = "突合"
             r.department = e.department
             r.email = e.email
             r.resolved_name_norm = e.name_norm
-            r.grade = e.grade  # employee master (None if column missing)
-        # 出勤簿 role からフォールバック
+            r.grade = e.grade
+        else:
+            # ② 氏名ファジーマッチ (旧CSV / 申請者CD 未登録フォールバック)
+            res = resolve_employee(r.inputter_name_raw, eidx, cfg)
+            r.employee_id = res.employee_id
+            r.employee_match_status = res.status
+            if res.employee_id and res.employee_id in emp_by_id:
+                e = emp_by_id[res.employee_id]
+                r.department = e.department
+                r.email = e.email
+                r.resolved_name_norm = e.name_norm
+                r.grade = e.grade
+        # ③ 出勤簿 role からフォールバック
         if r.grade is None and grade_lookup:
             name_key = r.resolved_name_norm or r.inputter_name_norm
             r.grade = grade_lookup.get(name_key)
+        # ④ config.role_overrides からフォールバック
+        if r.grade is None and role_override_lookup:
+            name_key = r.resolved_name_norm or r.inputter_name_norm
+            r.grade = role_override_lookup.get(name_key)
         for leg in r.legs:
             # 移動レッグ(電車･ﾊﾞｽ/車等)の到着地は経由地であり訪問先(顧客)ではない.
             # 地名→無関係社名の誤突合を避けるため顧客照合をスキップする.

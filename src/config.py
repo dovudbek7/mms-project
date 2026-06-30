@@ -9,22 +9,24 @@ import os
 from dataclasses import dataclass, field
 
 # プロジェクトルート (このファイルの2つ上)
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA = os.path.join(ROOT, "出張精算データ一式")
-RAKU = os.path.join(DATA, "楽々精算・楽々勤怠データ")
-LIST = os.path.join(DATA, "顧客・社員リスト")
+ROOT    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA    = os.path.join(ROOT, "出張精算データ一式")
+RAKU    = os.path.join(DATA, "楽々精算・楽々勤怠データ")
+LIST    = os.path.join(DATA, "顧客・社員リスト")
+WORKERS = os.path.join(DATA, "workers")
 
 
 @dataclass
 class Config:
     # --- 入力パス ---
-    expense_csv_path: str = os.path.join(RAKU, "出張精算_20260602_085224.csv")
+    expense_csv_path: str = os.path.join(WORKERS, "出張精算_20260625_154547.csv")
     employee_master_path: str = os.path.join(LIST, "社員リスト_20260608.xlsx")
     customer_master_path: str = os.path.join(LIST, "顧客リスト_20260608.xlsx")
     approver_roster_path: str = os.path.join(DATA, "20期評価者・承認者一覧_20260401.xlsx")
     attendance_paths: list = field(default_factory=lambda: [
-        os.path.join(RAKU, "出勤簿_日別詳細_20260528160105.xlsx"),
-        os.path.join(RAKU, "出勤簿_日別詳細_20260605120823.xlsx"),
+        os.path.join(RAKU,    "出勤簿_日別詳細_20260528160105.xlsx"),   # 2026-04
+        os.path.join(WORKERS, "出勤簿_日別詳細_20260630085826.xlsx"),   # 2026-05 (NEW)
+        os.path.join(RAKU,    "出勤簿_日別詳細_20260605120823.xlsx"),   # 2026-06
     ])
     approver_roster_sheet: str = "20期"
 
@@ -76,6 +78,60 @@ class Config:
     receipt_min_amount_to_flag: int = 1000
     confirm_only_counts_as_approval: bool = False
 
+    # --- 役職オーバーライド (組織図から手動抽出; 社員マスタに役職列がない場合に使用) ---
+    # 値: "管理職" | "一般職"
+    role_overrides: dict = field(default_factory=lambda: {
+        # ── 管理職 (部長・副部長・課長・課長代理・係長・係長代理) ──
+        "西 三照":      "管理職",   # 代表取締役社長
+        "高橋 昭太":    "管理職",   # 管理部長 / 管理課長
+        "岡田 高明":    "管理職",   # 技術部長
+        "河本 実":      "管理職",   # 技術部副部長
+        "浜内 邦嘉":    "管理職",   # ソリューションサポート部長
+        "岡部 信一":    "管理職",   # SS部副部長 / 課長
+        "茅野 義洋":    "管理職",   # 技術1課長
+        "中田 雅史":    "管理職",   # 技術2課長
+        "杉原 竜彦":    "管理職",   # 管理課長代理
+        "内田 修平":    "管理職",   # 技術2課1G係長
+        "鈴木 景大郎":  "管理職",   # 技術1課1G係長
+        "志村 一磨":    "管理職",   # 技術1課2G係長
+        "鈴木 和行":    "管理職",   # 技術2課2G係長
+        "藤倉 亮":      "管理職",   # 管理課1係長
+        "小野 智紀":    "管理職",   # 管理課2係長
+        "張 学鑫":      "管理職",   # 技術2課2G係長代理
+        "高橋 直樹":    "管理職",   # 技術2課1G係長代理
+        "長橋 正輝":    "管理職",   # 技術1課1G係長代理
+        # ── 一般職 ──
+        "松沢 響":      "一般職",
+        "藤岡 拓己":    "一般職",
+        "磯 優樹":      "一般職",
+        "品川 祐太朗":  "一般職",
+        "山本 翔也":    "一般職",
+        "清水 雄太":    "一般職",
+        "武田 幸大":    "一般職",
+        "石川 直樹":    "一般職",
+        "俣野 寛太":    "一般職",
+        "前田 逸人":    "一般職",
+        "岩岬 一尋":    "一般職",
+        "影山 知紀":    "一般職",
+        "水分 香織":    "一般職",
+        "坂東 和哉":    "一般職",
+        "藤本 宏治":    "一般職",
+        "山中 里紗":    "一般職",
+        "石原 直樹":    "一般職",
+        "井口 大昌":    "一般職",
+        "上野 勇輝":    "一般職",
+        "西澤 裕貴":    "一般職",
+        "小幡 裕亮":    "一般職",
+        "清水 俊貴":    "一般職",
+        "黒田 洋平":    "一般職",
+        "大塲 智徳":    "一般職",
+        "山本 一成":    "一般職",   # 部付(嘱託)
+        "伊藤 孝弘":    "一般職",   # 嘱託
+        "勝又 亮":      "一般職",
+        "木島 早希":    "一般職",
+        "福永 康平":    "一般職",
+    })
+
     # --- 名前エイリアス (カタカナ/漢字ゆれの手動辞書) ---
     name_aliases: dict = field(default_factory=lambda: {"張学シン": "張学鑫"})
 
@@ -87,10 +143,7 @@ class Config:
     })
 
     # --- 既知の欠落 (常に出力にバナー表示) ---
-    known_gaps: list = field(default_factory=lambda: [
-        "2026-05 の出勤簿(勤怠)が未提供 — 出張実態・労務の勤怠照合は劣化(advisory)。",
-        "社員マスタに役職列(役職/グレード/職位)が未登録の場合、役職不明として一般職上限と管理職上限の間は要確認扱いになります。",
-    ])
+    known_gaps: list = field(default_factory=lambda: [])
 
     def has_amount_rules(self) -> bool:
         """金額規程の実値が設定されているか."""

@@ -173,7 +173,7 @@ class ExpenseReport:
     actual_leg_count: int
     total_amount: int                # 合計 (header)
     computed_total: int              # sum(leg.amount)
-    inputter_name_raw: str           # 入力者名
+    inputter_name_raw: str           # 入力者名 or 申請者名
     inputter_name_norm: str
     legs: list[ExpenseLeg]
     approvers: list[ApprovalEntry]
@@ -183,6 +183,7 @@ class ExpenseReport:
     date_max: date | None
     source_file: str
     # --- 下流で付与 ---
+    applicant_cd: str | None = None  # 申請者CD (新CSV のみ; IDルックアップに使用)
     employee_id: str | None = None
     employee_match_status: str = UNMATCHED  # 突合 | 別名突合 | 未突合
     department: str | None = None

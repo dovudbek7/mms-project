@@ -74,29 +74,36 @@ def load_expense_reports(path: str, cfg: Config) -> list[ExpenseReport]:
         header = next(reader)
         data_rows = list(reader)
 
-    assert len(header) == 30, f"列数が想定外: {len(header)} (期待 30)"
-
     # --- 必要列をコアトークンの contains 照合で解決 (防御的) ---
-    ix_voucher = _find_col(header, "伝票No")          # ヘッダ情報:伝票No.(伝票No.)
-    ix_application = _find_col(header, "申請No")        # 出張申請伝票No.(申請No.)
-    ix_leg_count = _find_col(header, "行数")           # 行数
-    ix_leg_no = _find_col(header, "明細No")            # 明細No.
-    ix_leg_date = _find_col(header, "明細日付")         # 明細日付(日付)
-    ix_time_start = _find_col(header, "開始")          # 明細時刻(開始)(時刻)
-    ix_time_end = _find_col(header, "終了")            # 明細時刻(終了)(時刻)
-    ix_origin = _find_col(header, "出発地")            # 出発地(出発)
-    ix_dest = _find_col(header, "到着地")              # 到着地(到着)
-    ix_transport = _find_col(header, "交通機関")        # 交通機関(交通機関他)
-    ix_amount = _find_col(header, "金額")              # 金額(金額)
-    ix_receipt = _find_col(header, "証票")             # 証票(領収証)
-    ix_a1 = _find_col(header, "手当1CD")               # 手当1CD(日当)
-    ix_a2 = _find_col(header, "手当2CD")               # 手当2CD(宿泊料)
-    ix_a3 = _find_col(header, "手当3CD")               # 手当3CD(滞在費補助)
-    ix_remark = _find_col(header, "フリー")            # フリー1(備考)
-    ix_account = _find_col(header, "勘定科目名")        # 勘定科目名
-    ix_subtotal = _find_col(header, "小計")           # 小計(小計)
-    ix_total = _find_col(header, "合計")              # 合計(合計)
-    ix_inputter = _find_col(header, "入力者名")        # 入力者名
+    ix_voucher      = _find_col(header, "伝票No")
+    ix_application  = _find_col(header, "申請No")
+    ix_leg_count    = _find_col(header, "行数")
+    ix_leg_no       = _find_col(header, "明細No")
+    ix_leg_date     = _find_col(header, "明細日付")
+    ix_time_start   = _find_col(header, "開始")
+    ix_time_end     = _find_col(header, "終了")
+    ix_origin       = _find_col(header, "出発地")
+    ix_dest         = _find_col(header, "到着地")
+    ix_transport    = _find_col(header, "交通機関")
+    ix_amount       = _find_col(header, "金額")
+    ix_receipt      = _find_col(header, "証票")
+    ix_a1           = _find_col(header, "手当1CD")
+    ix_a2           = _find_col(header, "手当2CD")
+    ix_a3           = _find_col(header, "手当3CD")
+    ix_remark       = _find_col(header, "フリー")
+    ix_account      = _find_col(header, "勘定科目名")
+    ix_subtotal     = _find_col(header, "小計")
+    ix_total        = _find_col(header, "合計", exclude="手当")   # 手当計 と区別
+    # 入力者名 (旧形式) / 申請者名 (新形式) の両対応
+    try:
+        ix_inputter = _find_col(header, "入力者名")
+    except ValueError:
+        ix_inputter = _find_col(header, "申請者名")
+    # 申請者CD (新CSV のみ; 旧CSV にはない)
+    try:
+        ix_applicant_cd = _find_col(header, "申請者CD")
+    except ValueError:
+        ix_applicant_cd = -1
 
     # 承認スロット (承認実行者N名 / 承認日N) を 1..5 で解決
     ix_approver = []
@@ -197,6 +204,7 @@ def load_expense_reports(path: str, cfg: Config) -> list[ExpenseReport]:
         date_max = max(leg_dates) if leg_dates else None
 
         inputter_raw = _cell(head, ix_inputter).strip()
+        applicant_cd = _blank_to_none(_cell(head, ix_applicant_cd)) if ix_applicant_cd >= 0 else None
 
         reports.append(
             ExpenseReport(
@@ -215,6 +223,7 @@ def load_expense_reports(path: str, cfg: Config) -> list[ExpenseReport]:
                 date_min=date_min,
                 date_max=date_max,
                 source_file=path,
+                applicant_cd=applicant_cd,
             )
         )
 

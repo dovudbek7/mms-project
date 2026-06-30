@@ -17,6 +17,31 @@
 """
 from __future__ import annotations
 
+# 東京23区の区名リスト (都道府県フィールドに区名が含まれる場合に 東京23区 と判定)
+_TOKYO_23_KU: frozenset[str] = frozenset([
+    "千代田区", "中央区", "港区", "新宿区", "文京区",
+    "台東区", "墨田区", "江東区", "品川区", "目黒区",
+    "大田区", "世田谷区", "渋谷区", "中野区", "杉並区",
+    "豊島区", "北区", "荒川区", "板橋区", "練馬区",
+    "足立区", "葛飾区", "江戸川区",
+])
+
+
+def _is_tokyo_23ku(prefecture: str | None) -> bool:
+    """都道府県フィールドが東京23区内かを判定する.
+
+    prefecture に "東京" が含まれ、かつ23区のいずれかの区名が含まれる場合のみ True.
+    "東京都八王子市" など多摩地区は False になる.
+    prefecture が区名のみ ("港区") でも True を返す.
+    """
+    if not prefecture:
+        return False
+    pref = prefecture.strip()
+    if "東京" in pref:
+        return any(ku in pref for ku in _TOKYO_23_KU)
+    return any(ku in pref for ku in _TOKYO_23_KU)
+
+
 from models import (
     ExpenseReport,
     CheckResult,
@@ -170,7 +195,7 @@ def _check_hotel(
     leg_no: int, amount: int, prefecture: str | None, grade: str | None,
     hotel_limits: dict, overs: list, needs_check: list,
 ) -> None:
-    region = "東京23区" if prefecture and "東京" in prefecture else "その他"
+    region = "東京23区" if _is_tokyo_23ku(prefecture) else "その他"
     rtable = hotel_limits.get(region, hotel_limits.get("その他", {}))
     _check_grade_allowance(leg_no, f"ホテル代({region})", amount, rtable, grade, overs, needs_check)
 

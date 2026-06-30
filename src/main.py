@@ -61,13 +61,18 @@ def run(cfg: Config, stamp: str | None = None) -> str:
     sheet = build_check_sheet(reports, employees, customers, approvers, attendance, cfg,
                               import_log=import_log)
 
-    os.makedirs(cfg.output_dir, exist_ok=True)
     stamp = stamp or datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path = os.path.join(cfg.output_dir, f"{cfg.output_prefix}_{stamp}.xlsx")
-    write_excel(sheet, out_path, cfg)
+    out_dir = os.path.join(cfg.output_dir, stamp)
+    os.makedirs(out_dir, exist_ok=True)
 
-    html_path = out_path.replace(".xlsx", ".html")
-    read_excel_and_write_html(out_path, html_path)
+    base_name = f"{cfg.output_prefix}_{stamp}"
+    out_path  = os.path.join(out_dir, f"{base_name}.xlsx")
+    html_ja   = os.path.join(out_dir, f"{base_name}_ja.html")
+    html_uz   = os.path.join(out_dir, f"{base_name}_uz.html")
+
+    write_excel(sheet, out_path, cfg)
+    read_excel_and_write_html(out_path, html_ja, lang="ja")
+    read_excel_and_write_html(out_path, html_uz, lang="uz")
 
     # サマリ統計
     overall = [r["総合判定"] for r in sheet["primary"]]
@@ -75,7 +80,7 @@ def run(cfg: Config, stamp: str | None = None) -> str:
     print("\n=== 総合判定 内訳 ===")
     for k, v in Counter(overall).most_common():
         print(f"  {k}: {v}")
-    print(f"\n出力: {out_path}")
+    print(f"\n出力フォルダ: {out_dir}")
     return out_path
 
 
