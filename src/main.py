@@ -22,6 +22,7 @@ from loaders.customer_loader import load_customers
 from loaders.approver_loader import load_approver_rules
 from checksheet import build_check_sheet
 from excel_writer import write_excel
+from html_writer_web import read_excel_and_write_html
 
 
 def run(cfg: Config, stamp: str | None = None) -> str:
@@ -64,6 +65,9 @@ def run(cfg: Config, stamp: str | None = None) -> str:
     stamp = stamp or datetime.now().strftime("%Y%m%d_%H%M%S")
     out_path = os.path.join(cfg.output_dir, f"{cfg.output_prefix}_{stamp}.xlsx")
     write_excel(sheet, out_path, cfg)
+
+    html_path = out_path.replace(".xlsx", ".html")
+    read_excel_and_write_html(out_path, html_path)
 
     # サマリ統計
     overall = [r["総合判定"] for r in sheet["primary"]]
