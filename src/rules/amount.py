@@ -13,7 +13,8 @@
     旅費規定 未提供時は RULE_MISSING を返す.
 
 (3) 勘定科目分類チェック:
-    車(transport) かつ 貸借費(account_name) の場合は要確認.
+    車(transport) かつ 貸借費(account_name) の場合は要確認
+    (レンタカー・社用車とも旅費交通費への修正が必要).
 """
 from __future__ import annotations
 
@@ -295,11 +296,13 @@ def _check_rules(r: ExpenseReport, cfg: Config) -> tuple[str, list[str], dict]:
             )
 
         # (6) 車 + 貸借費 分類チェック
+        # 2026-07-01 客先回答: レンタカー・社用車とも区分不要, 旅費交通費に統一計上.
         if leg.transport == "車" and leg.account_name and "貸借費" in leg.account_name:
             needs_check.append({
                 "明細No": leg.leg_no, "種別": "勘定科目分類",
                 "金額": leg.amount,
-                "理由": "社用車(旅費交通費)とレンタカー(貸借費)の区分確認が必要",
+                "理由": "貸借費で計上されていますが、旅費交通費への修正が必要です"
+                        "（レンタカー・社用車とも旅費交通費に統一）",
             })
 
         # (7) 委託サービス費 + 交通・宿泊系 分類チェック

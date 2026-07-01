@@ -180,6 +180,22 @@ def _status_class(val: str) -> str:
 
 STATUS_COLS_01 = {7, 8, 9, 10, 11, 12, 13}   # 0-based indices in sheet 01 data rows
 
+# ステータス凡例アイコン (✓ 正常 / ▲ 要確認 / ✕ NG / － データなし)
+_STATUS_ICON = {"s-ok": "✓", "s-warn": "▲", "s-ng": "✕", "s-unknown": "－"}
+
+# 01_一次承認 の列グループ (見出し2段表示用). 各要素は (グループ名, 列スパン数).
+# header 全列を左から連続でカバーする (ラベル空文字は無地スパン).
+SHEET01_GROUPS = [
+    ("", 4),                          # 伝票No./入力者名/社員番号/所属
+    ("出張情報", 2),                   # 出張期間/合計金額
+    ("承認状況", 1),                   # 承認状態
+    ("1. 出張実態の確認", 1),           # 出張実態
+    ("2. 労務・健康管理の確認", 1),      # 労務
+    ("3. 出張費・宿泊費上限確認", 1),    # 金額規程
+    ("4. 全体チェック", 4),             # 二重申請/領収書/承認ルート/総合判定
+    ("詳細", 2),                       # 要確認項目/差戻し候補
+]
+
 
 def _cell_html(val: str, col_idx: int, sheet_id: str, i18n: dict | None = None) -> str:
     cls = ""
@@ -193,13 +209,36 @@ def _cell_html(val: str, col_idx: int, sheet_id: str, i18n: dict | None = None) 
         cls = "s-ok" if val == "OK" else "s-ng"
     display = _translate_cell_val(val, i18n) if i18n else val
     if cls:
-        return f'<span class="badge {cls}">{display}</span>'
+        icon = _STATUS_ICON.get(cls, "")
+        return f'<span class="badge {cls}">{icon} {display}</span>'
     return display
 
 
+def _group_header_html(groups: list, header_len: int, tr: dict) -> str:
+    total = sum(span for _, span in groups)
+    if total != header_len:
+        return ""  # 列数不一致なら安全にグループ行を省略
+    cells = []
+    start = 0
+    for label, span in groups:
+        if label:
+            cells.append(
+                f'<th colspan="{span}" class="grp-th" data-start="{start}" '
+                f'data-span="{span}" onclick="highlightGroup(this)" '
+                f'onmouseenter="previewGroup(this,true)" onmouseleave="previewGroup(this,false)">'
+                f'{tr.get(label, label)}</th>'
+            )
+        else:
+            cells.append(f'<th colspan="{span}" class="grp-th grp-th-blank"></th>')
+        start += span
+    return f"<tr class='grp-row'>{''.join(cells)}</tr>"
+
+
 def _build_table(header: list[str], rows: list[list[str]], sheet_id: str,
-                 col_translations: dict | None = None, i18n: dict | None = None) -> str:
+                 col_translations: dict | None = None, i18n: dict | None = None,
+                 groups: list | None = None) -> str:
     tr = col_translations or {}
+    group_row_html = _group_header_html(groups, len(header), tr) if groups else ""
     th_html = "".join(
         f'<th onclick="sortTable(this)" data-col="{i}">'
         f'{tr.get(h, h)}<span class="sort-icon">⇅</span></th>'
@@ -212,12 +251,17 @@ def _build_table(header: list[str], rows: list[list[str]], sheet_id: str,
             f'{_cell_html(str(row[i]) if i < len(row) else "", i, sheet_id, i18n)}</td>'
             for i in range(len(header))
         )
-        tr_html_parts.append(f"<tr>{tds}</tr>")
+        status_attr = ""
+        if sheet_id == "01" and len(row) > 13:
+            raw_status = str(row[13])
+            code = "未確認" if raw_status.startswith("未確認") else raw_status
+            status_attr = f' data-status="{code}"'
+        tr_html_parts.append(f"<tr{status_attr}>{tds}</tr>")
     tbody = "\n".join(tr_html_parts)
     return f"""
 <div class="tbl-wrap">
   <table class="data-tbl" id="tbl-{sheet_id}">
-    <thead><tr>{th_html}</tr></thead>
+    <thead>{group_row_html}<tr>{th_html}</tr></thead>
     <tbody>{tbody}</tbody>
   </table>
 </div>"""
@@ -234,6 +278,8 @@ I18N = {
         "lbl_ok":       "OK",
         "lbl_unknown":  "未確認",
         "lbl_total":    "合計件数",
+        "legend_title": "ステータス凡例：",
+        "filter_status_all": "ステータス：すべて",
         "tabs": {
             "01": "01_一次承認",
             "02": "02_二次明細",
@@ -256,6 +302,8 @@ I18N = {
         "lbl_ok":       "OK",
         "lbl_unknown":  "Noaniq",
         "lbl_total":    "Jami ariza",
+        "legend_title": "Status belgilari:",
+        "filter_status_all": "Status: barchasi",
         "tabs": {
             "01": "01 — Birlamchi tasdiqlash",
             "02": "02 — Tafsilot",
@@ -440,6 +488,14 @@ I18N = {
                 "・Davomati hisobot oylari",
         },
         "headers": {
+            # ── Sheet 01 列グループ見出し ──
+            "出張情報":                       "Safar ma'lumoti",
+            "承認状況":                       "Tasdiqlash holati",
+            "1. 出張実態の確認":              "1. Safar holati tekshiruvi",
+            "2. 労務・健康管理の確認":        "2. Mehnat/sog'liq tekshiruvi",
+            "3. 出張費・宿泊費上限確認":      "3. Xarajat/mehmonxona limiti",
+            "4. 全体チェック":                "4. Umumiy tekshiruv",
+            "詳細":                           "Tafsilot",
             # ── Sheet 01 ──
             "伝票No.":      "Hujjat №",
             "入力者名":     "Murojaat qiluvchi",
@@ -509,7 +565,15 @@ def _sheet01_stats(rows: list[list[str]], i18n: dict) -> str:
     warn    = sum(1 for r in rows if len(r) > 13 and r[13] == "要確認")
     ok      = sum(1 for r in rows if len(r) > 13 and r[13] == "OK")
     unknown = sum(1 for r in rows if len(r) > 13 and r[13].startswith("未確認"))
-    return f"""
+    legend = f"""
+<div class="legend-row">
+  <span class="legend-title">{i18n["legend_title"]}</span>
+  <span class="legend-item"><span class="badge s-ok">✓ {i18n["lbl_ok"]}</span></span>
+  <span class="legend-item"><span class="badge s-warn">▲ {i18n["lbl_warn"]}</span></span>
+  <span class="legend-item"><span class="badge s-ng">✕ {i18n["lbl_ng"]}</span></span>
+  <span class="legend-item"><span class="badge s-unknown">－ {i18n["lbl_unknown"]}</span></span>
+</div>"""
+    return legend + f"""
 <div class="stats-row">
   <div class="stat-box s-ng-box"><div class="stat-num">{ng}</div><div class="stat-lbl">{i18n["lbl_ng"]}</div></div>
   <div class="stat-box s-warn-box"><div class="stat-num">{warn}</div><div class="stat-lbl">{i18n["lbl_warn"]}</div></div>
@@ -537,12 +601,31 @@ def _render_sheet(sid: str, label: str, data: dict, i18n: dict) -> str:
         notices_html = f'<div class="notice-box"><ul>{items}</ul></div>'
     stats_html = _sheet01_stats(rows, i18n) if sid == "01" else ""
     suffix = i18n["count_suffix"]
-    search_html = f"""
+    if sid == "01":
+        status_opts = "".join(
+            f'<option value="{v}">{lbl}</option>'
+            for v, lbl in [
+                ("OK", i18n["lbl_ok"]), ("要確認", i18n["lbl_warn"]),
+                ("NG", i18n["lbl_ng"]), ("未確認", i18n["lbl_unknown"]),
+            ]
+        )
+        search_html = f"""
+<div class="toolbar">
+  <input class="search-box" type="text" placeholder="{i18n['search']}" oninput="applyFilters01('{suffix}')" id="search-{sid}">
+  <select class="status-select" id="status-{sid}" onchange="applyFilters01('{suffix}')">
+    <option value="">{i18n['filter_status_all']}</option>
+    {status_opts}
+  </select>
+  <span class="row-count" id="count-{sid}">{len(rows)} {suffix}</span>
+</div>"""
+    else:
+        search_html = f"""
 <div class="toolbar">
   <input class="search-box" type="text" placeholder="{i18n['search']}" oninput="filterTable(this, '{sid}', '{suffix}')">
   <span class="row-count" id="count-{sid}">{len(rows)} {suffix}</span>
 </div>"""
-    table_html = _build_table(header, rows, sid, i18n.get("headers"), i18n)
+    groups = SHEET01_GROUPS if sid == "01" else None
+    table_html = _build_table(header, rows, sid, i18n.get("headers"), i18n, groups=groups)
     return f"""
 <div id="panel-{sid}" class="panel" style="display:none">
   {notices_html}
@@ -622,6 +705,13 @@ body {
 }
 .notice-box ul { padding-left: 16px; }
 .notice-box li { margin-bottom: 3px; }
+/* ── Legend ── */
+.legend-row {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 10px; font-size: 12px; color: #4b5563;
+}
+.legend-title { font-weight: 600; }
+.legend-item { display: inline-flex; align-items: center; }
 /* ── Stats ── */
 .stats-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .stat-box {
@@ -650,6 +740,15 @@ body {
   background: #fff;
 }
 .search-box:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+.status-select {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  font-family: inherit;
+  background: #fff;
+}
+.status-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
 .row-count { font-size: 11px; color: #6b7280; }
 /* ── Table ── */
 .tbl-wrap {
@@ -671,6 +770,29 @@ body {
 }
 .data-tbl thead th:hover { background: var(--navy2); }
 .sort-icon { margin-left: 4px; opacity: 0.5; font-size: 10px; }
+/* ── Grouped header (sheet 01) ── */
+.data-tbl thead tr.grp-row { background: #0e2144; }
+.data-tbl thead th.grp-th {
+  height: 38px;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border-left: 1px solid rgba(255,255,255,0.2);
+  border-bottom: 2px solid rgba(255,255,255,0.35);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.data-tbl thead th.grp-th:hover { background: #1e4a8a; }
+.data-tbl thead th.grp-th.grp-active { background: var(--accent); }
+.data-tbl thead th.grp-th-blank { background: transparent; border-left: none; border-bottom: none; cursor: default; }
+.data-tbl thead th.grp-th-blank:hover { background: transparent; }
+.data-tbl tbody td.col-hl { background: #dbeafe; }
+.data-tbl tbody tr:hover td.col-hl { background: #bfdbfe; }
+.data-tbl tbody td.col-hl-preview { background: #eff6ff; }
+.data-tbl tbody tr:hover td.col-hl-preview { background: #dbeafe; }
 .data-tbl tbody tr:nth-child(even) { background: var(--stripe); }
 .data-tbl tbody tr:hover { background: #eff6ff; }
 .data-tbl tbody td {
@@ -712,6 +834,52 @@ function filterTable(input, sid, suffix) {
     if (match) visible++;
   });
   document.getElementById('count-' + sid).textContent = visible + ' ' + suffix;
+}
+
+// ── Sheet 01: text search + status dropdown combined ──
+function applyFilters01(suffix) {
+  suffix = suffix || '件';
+  const q = document.getElementById('search-01').value.toLowerCase();
+  const status = document.getElementById('status-01').value;
+  const tbody = document.querySelector('#tbl-01 tbody');
+  let visible = 0;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const textMatch = tr.textContent.toLowerCase().includes(q);
+    const statusMatch = !status || tr.dataset.status === status;
+    const match = textMatch && statusMatch;
+    tr.classList.toggle('hidden', !match);
+    if (match) visible++;
+  });
+  document.getElementById('count-01').textContent = visible + ' ' + suffix;
+}
+
+// ── Group header hover: temporary column preview (removed on mouseleave) ──
+function previewGroup(th, on) {
+  const table = th.closest('table');
+  const start = parseInt(th.dataset.start);
+  const span = parseInt(th.dataset.span);
+  table.querySelectorAll('tbody tr').forEach(tr => {
+    for (let i = start; i < start + span; i++) {
+      if (tr.cells[i]) tr.cells[i].classList.toggle('col-hl-preview', on);
+    }
+  });
+}
+
+// ── Group header click: highlight its columns ──
+function highlightGroup(th) {
+  const table = th.closest('table');
+  const wasActive = th.classList.contains('grp-active');
+  table.querySelectorAll('.grp-th').forEach(t => t.classList.remove('grp-active'));
+  table.querySelectorAll('td.col-hl').forEach(td => td.classList.remove('col-hl'));
+  if (wasActive) return;
+  th.classList.add('grp-active');
+  const start = parseInt(th.dataset.start);
+  const span = parseInt(th.dataset.span);
+  table.querySelectorAll('tbody tr').forEach(tr => {
+    for (let i = start; i < start + span; i++) {
+      if (tr.cells[i]) tr.cells[i].classList.add('col-hl');
+    }
+  });
 }
 
 // ── Sort ──
